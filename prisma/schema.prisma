@@ -1,0 +1,105 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String      @id @default(cuid())
+  email         String      @unique
+  name          String?
+  workspaces    Workspace[]
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+}
+
+model Workspace {
+  id            String      @id @default(cuid())
+  name          String
+  userId        String
+  user          User        @relation(fields: [userId], references: [id])
+  brandVoice    Json?       // Analyzed voice characteristics
+  workflows     Workflow[]
+  contents      Content[]
+  voiceSamples  BrandVoiceSample[]
+  voiceEdits    ContentEdit[]
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+}
+
+model Workflow {
+  id            String      @id @default(cuid())
+  name          String
+  workspaceId   String
+  workspace     Workspace   @relation(fields: [workspaceId], references: [id])
+  config        Json        // Stores workflow configuration
+  status        String      @default("active")
+  runs          WorkflowRun[]
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+}
+
+model WorkflowRun {
+  id            String      @id @default(cuid())
+  workflowId    String
+  workflow      Workflow    @relation(fields: [workflowId], references: [id])
+  topic         String
+  brandVoiceSamples Json?   // User-provided samples for this run
+  status        String      // pending, scraping, analyzing, generating, reviewing, published, failed
+  scrapedData   Json?
+  analysisData  Json?
+  generatedIdeas Json?
+  finalContent  Json?
+  metrics       Json?
+  startedAt     DateTime    @default(now())
+  completedAt   DateTime?
+  contents      Content[]
+}
+
+model Content {
+  id            String      @id @default(cuid())
+  workspaceId   String
+  workspace     Workspace   @relation(fields: [workspaceId], references: [id])
+  runId         String?
+  run           WorkflowRun? @relation(fields: [runId], references: [id])
+  platform      String      // instagram, linkedin, twitter
+  type          String      // post, reel, story
+  content       Json        // Stores all content data
+  originalContent Json?     // Original AI-generated content before edits
+  status        String      // draft, reviewing, approved, published
+  performance   Json?       // Engagement metrics
+  edits         ContentEdit[]
+  publishedAt   DateTime?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+}
+
+model BrandVoiceSample {
+  id            String      @id @default(cuid())
+  workspaceId   String
+  workspace     Workspace   @relation(fields: [workspaceId], references: [id])
+  content       String      @db.Text // The sample content text
+  source        String      // 'user_provided', 'approved_content', 'external_url'
+  metadata      Json?       // Additional context (platform, performance metrics, etc.)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+}
+
+model ContentEdit {
+  id            String      @id @default(cuid())
+  contentId     String
+  content       Content     @relation(fields: [contentId], references: [id])
+  workspaceId   String
+  workspace     Workspace   @relation(fields: [workspaceId], references: [id])
+  fieldEdited   String      // 'caption', 'hook', 'hashtags', 'cta'
+  originalText  String      @db.Text
+  editedText    String      @db.Text
+  editReason    String?     // Optional user feedback on why they made the edit
+  createdAt     DateTime    @default(now())
+}
