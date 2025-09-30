@@ -25,6 +25,7 @@
   "homepage": "https://github.com/syedabbasengineering/cc-ig#readme",
   "description": "",
   "dependencies": {
+    "@auth/prisma-adapter": "^2.10.0",
     "@bull-board/api": "^6.13.0",
     "@bull-board/express": "^6.13.0",
     "@langchain/openai": "^0.6.13",
@@ -51,12 +52,14 @@
     "langchain": "^0.3.34",
     "lucide-react": "^0.544.0",
     "next": "^15.5.4",
+    "next-auth": "^4.24.11",
     "openai": "^5.23.1",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "redis": "^5.8.2",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.3.1",
+    "tailwindcss-animate": "^1.0.7",
     "zod": "^4.1.11"
   },
   "devDependencies": {
