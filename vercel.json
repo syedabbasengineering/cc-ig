@@ -4,24 +4,6 @@
   "installCommand": "npm install --legacy-peer-deps",
   "framework": "nextjs",
   "regions": ["iad1"],
-  "env": {
-    "DATABASE_URL": "@database-url",
-    "NEXTAUTH_SECRET": "@nextauth-secret",
-    "NEXTAUTH_URL": "@nextauth-url",
-    "REDIS_URL": "@redis-url",
-    "OPENAI_API_KEY": "@openai-api-key",
-    "OPENROUTER_API_KEY": "@openrouter-api-key",
-    "APIFY_TOKEN": "@apify-token",
-    "PINECONE_API_KEY": "@pinecone-api-key",
-    "PINECONE_ENVIRONMENT": "@pinecone-environment",
-    "PINECONE_INDEX": "@pinecone-index",
-    "SLACK_WEBHOOK_URL": "@slack-webhook-url",
-    "CLOUDINARY_CLOUD_NAME": "@cloudinary-cloud-name",
-    "CLOUDINARY_API_KEY": "@cloudinary-api-key",
-    "CLOUDINARY_API_SECRET": "@cloudinary-api-secret",
-    "NEXT_PUBLIC_SENTRY_DSN": "@sentry-dsn",
-    "SENTRY_AUTH_TOKEN": "@sentry-auth-token"
-  },
   "build": {
     "env": {
       "NEXT_TELEMETRY_DISABLED": "1"
