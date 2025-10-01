@@ -1,18 +1,51 @@
+import { slackConfigService } from './slack-config';
+
 export interface SlackNotification {
   channel?: string;
   text: string;
   blocks?: any[];
   attachments?: any[];
+  threadTs?: string; // For threaded replies
+}
+
+export interface SlackMessageMetadata {
+  channelId?: string;
+  messageTs?: string;
+  threadTs?: string;
 }
 
 export class SlackNotificationService {
   private webhookUrl: string;
+  private useWebAPI: boolean;
 
-  constructor(webhookUrl?: string) {
+  constructor(webhookUrl?: string, useWebAPI = true) {
     this.webhookUrl = webhookUrl || process.env.SLACK_WEBHOOK_URL || '';
+    this.useWebAPI = useWebAPI && slackConfigService.isConfigured();
   }
 
-  async sendNotification(notification: SlackNotification): Promise<boolean> {
+  async sendNotification(
+    notification: SlackNotification
+  ): Promise<SlackMessageMetadata | boolean> {
+    // Use Web API if available for better features (threading, updating, etc.)
+    if (this.useWebAPI && notification.channel) {
+      try {
+        const result = await slackConfigService.postMessage(
+          notification.channel,
+          notification.text,
+          notification.blocks
+        );
+        return {
+          channelId: result.channel,
+          messageTs: result.ts,
+          threadTs: notification.threadTs,
+        };
+      } catch (error) {
+        console.error('Failed to send Slack message via Web API:', error);
+        // Fallback to webhook
+      }
+    }
+
+    // Use webhook as fallback or default
     if (!this.webhookUrl) {
       console.warn('Slack webhook URL not configured, skipping notification');
       return false;
@@ -36,6 +69,56 @@ export class SlackNotificationService {
       console.error('Failed to send Slack notification:', error);
       return false;
     }
+  }
+
+  /**
+   * Update an existing Slack message
+   */
+  async updateNotification(
+    metadata: SlackMessageMetadata,
+    text: string,
+    blocks?: any[]
+  ): Promise<boolean> {
+    if (!this.useWebAPI || !metadata.channelId || !metadata.messageTs) {
+      console.warn('Cannot update message - Web API not available or missing metadata');
+      return false;
+    }
+
+    try {
+      await slackConfigService.updateMessage(
+        metadata.channelId,
+        metadata.messageTs,
+        text,
+        blocks
+      );
+      return true;
+    } catch (error) {
+      console.error('Failed to update Slack message:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Send a threaded reply to an existing message
+   */
+  async sendThreadReply(
+    metadata: SlackMessageMetadata,
+    text: string,
+    blocks?: any[]
+  ): Promise<SlackMessageMetadata | boolean> {
+    if (!this.useWebAPI || !metadata.channelId || !metadata.messageTs) {
+      console.warn('Cannot send thread reply - Web API not available or missing metadata');
+      return false;
+    }
+
+    const notification: SlackNotification = {
+      channel: metadata.channelId,
+      text,
+      blocks,
+      threadTs: metadata.messageTs,
+    };
+
+    return await this.sendNotification(notification);
   }
 
   async notifyContentReady(runId: string, contents: any[], workspaceName?: string) {

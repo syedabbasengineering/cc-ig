@@ -2,6 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import Link from 'next/link';
 
 export default function WorkflowsPage() {
   // For now, showing empty state to avoid tRPC type complexity
@@ -18,7 +19,7 @@ export default function WorkflowsPage() {
           </p>
         </div>
         <Button asChild>
-          <a href="/dashboard/workflows/new">Create New Workflow</a>
+          <Link href="/dashboard/workflows/new">Create New Workflow</Link>
         </Button>
       </div>
 
@@ -71,7 +72,7 @@ export default function WorkflowsPage() {
               Create your first workflow to start generating AI-powered content
             </p>
             <Button asChild>
-              <a href="/dashboard/workflows/new">Create First Workflow</a>
+              <Link href="/dashboard/workflows/new">Create First Workflow</Link>
             </Button>
           </CardContent>
         </Card>

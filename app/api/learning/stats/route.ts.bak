@@ -1,0 +1,173 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from '@/src/lib/auth';
+import { prisma } from '@/src/lib/db/client';
+
+
+function calculateLearningStats(edits: any[], contents: any[]) {
+  if (edits.length === 0) {
+    return {
+      totalEdits: 0,
+      avgEditsPerContent: 0,
+      mostEditedField: 'caption',
+      improvementTrend: 'stable' as const,
+      learningScore: 0
+    };
+  }
+
+  const totalEdits = edits.length;
+  const avgEditsPerContent = contents.length > 0 ? totalEdits / contents.length : 0;
+
+  // Find most edited field
+  const fieldCounts = edits.reduce((acc, edit) => {
+    acc[edit.fieldEdited] = (acc[edit.fieldEdited] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+
+  const mostEditedField = Object.entries(fieldCounts).sort(([,a], [,b]) => b - a)[0]?.[0] || 'caption';
+
+  // Calculate improvement trend based on edit frequency over time
+  const sortedEdits = edits.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+  const midpoint = Math.floor(sortedEdits.length / 2);
+  const firstHalf = sortedEdits.slice(0, midpoint);
+  const secondHalf = sortedEdits.slice(midpoint);
+
+  let improvementTrend: 'improving' | 'stable' | 'declining' = 'stable';
+
+  if (sortedEdits.length >= 10) {
+    const firstHalfAvg = firstHalf.length;
+    const secondHalfAvg = secondHalf.length;
+
+    if (secondHalfAvg < firstHalfAvg * 0.8) {
+      improvementTrend = 'improving'; // Fewer edits means AI is learning
+    } else if (secondHalfAvg > firstHalfAvg * 1.2) {
+      improvementTrend = 'declining';
+    }
+  }
+
+  // Calculate learning score based on various factors
+  let learningScore = 50; // Base score
+
+  // Factor 1: Reduction in edits over time
+  if (improvementTrend === 'improving') {
+    learningScore += 30;
+  } else if (improvementTrend === 'declining') {
+    learningScore -= 20;
+  }
+
+  // Factor 2: Content-to-edit ratio (fewer edits per content is better)
+  if (avgEditsPerContent < 1) {
+    learningScore += 20;
+  } else if (avgEditsPerContent > 3) {
+    learningScore -= 20;
+  }
+
+  // Factor 3: Consistency in edit types (focused learning)
+  const fieldDistribution = Object.values(fieldCounts);
+  const maxFieldCount = Math.max(...fieldDistribution);
+  const consistency = maxFieldCount / totalEdits;
+
+  if (consistency > 0.5) {
+    learningScore += 10; // Focused on specific improvements
+  }
+
+  // Factor 4: Recent activity (more recent edits show active learning)
+  const recentEdits = edits.filter(edit => {
+    const editDate = new Date(edit.createdAt);
+    const weekAgo = new Date();
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    return editDate > weekAgo;
+  });
+
+  if (recentEdits.length > 0) {
+    learningScore += 10;
+  }
+
+  // Ensure score is between 0 and 100
+  learningScore = Math.max(0, Math.min(100, learningScore));
+
+  return {
+    totalEdits,
+    avgEditsPerContent: Math.round(avgEditsPerContent * 10) / 10,
+    mostEditedField,
+    improvementTrend,
+    learningScore: Math.round(learningScore)
+  };
+}
+
+export async function GET(request: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions);
+
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const url = new URL(request.url);
+    const timeframe = url.searchParams.get('timeframe') || '30d';
+
+    const workspace = await prisma.workspace.findFirst({
+      where: {
+        userId: session.user.id
+      }
+    });
+
+    if (!workspace) {
+      return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
+    }
+
+    // Calculate date range
+    const now = new Date();
+    let startDate = new Date();
+
+    switch (timeframe) {
+      case '7d':
+        startDate.setDate(now.getDate() - 7);
+        break;
+      case '30d':
+        startDate.setDate(now.getDate() - 30);
+        break;
+      case '90d':
+        startDate.setDate(now.getDate() - 90);
+        break;
+      case '1y':
+        startDate.setFullYear(now.getFullYear() - 1);
+        break;
+      default:
+        startDate.setDate(now.getDate() - 30);
+    }
+
+    const [edits, contents] = await Promise.all([
+      prisma.contentEdit.findMany({
+        where: {
+          workspaceId: workspace.id,
+          createdAt: {
+            gte: startDate
+          }
+        },
+        include: {
+          content: {
+            select: {
+              platform: true,
+              type: true
+            }
+          }
+        }
+      }),
+      prisma.content.findMany({
+        where: {
+          workspaceId: workspace.id,
+          createdAt: {
+            gte: startDate
+          }
+        }
+      })
+    ]);
+
+    const stats = calculateLearningStats(edits, contents);
+    return NextResponse.json(stats);
+  } catch (error) {
+    console.error('Error calculating stats:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}

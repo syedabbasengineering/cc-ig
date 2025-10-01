@@ -1,0 +1,90 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/src/lib/db/client';
+import { slackConfigService } from '@/src/lib/integrations/slack-config';
+
+/**
+ * Handles Slack OAuth callback
+ */
+export async function GET(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const code = searchParams.get('code');
+    const state = searchParams.get('state');
+    const error = searchParams.get('error');
+
+    if (error) {
+      return NextResponse.redirect(
+        `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/settings?error=slack_auth_denied`
+      );
+    }
+
+    if (!code || !state) {
+      return NextResponse.redirect(
+        `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/settings?error=slack_auth_invalid`
+      );
+    }
+
+    // Extract workspace ID from state
+    const [workspaceId] = state.split(':');
+
+    // Verify state matches
+    const workspace = await prisma.workspace.findUnique({
+      where: { id: workspaceId },
+      select: { settings: true },
+    });
+
+    const storedState = (workspace?.settings as any)?.slackOAuthState;
+    if (storedState !== state) {
+      return NextResponse.redirect(
+        `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/settings?error=slack_auth_invalid_state`
+      );
+    }
+
+    // Exchange code for access token
+    const redirectUri = `${process.env.NEXT_PUBLIC_APP_URL}/api/integrations/slack/callback`;
+    const oauthResponse = await slackConfigService.exchangeOAuthCode(code, redirectUri);
+
+    if (!oauthResponse.ok) {
+      console.error('Slack OAuth error:', oauthResponse);
+      return NextResponse.redirect(
+        `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/settings?error=slack_auth_failed`
+      );
+    }
+
+    // Store integration details in workspace settings
+    const slackIntegration = {
+      teamId: oauthResponse.team?.id,
+      teamName: oauthResponse.team?.name,
+      channelId: oauthResponse.incoming_webhook?.channel_id,
+      channelName: oauthResponse.incoming_webhook?.channel,
+      webhookUrl: oauthResponse.incoming_webhook?.url,
+      botToken: oauthResponse.access_token,
+      botUserId: oauthResponse.bot_user_id,
+      scope: oauthResponse.scope,
+      installedAt: new Date().toISOString(),
+    };
+
+    await prisma.workspace.update({
+      where: { id: workspaceId },
+      data: {
+        settings: {
+          ...((await prisma.workspace.findUnique({
+            where: { id: workspaceId },
+            select: { settings: true },
+          }))?.settings as any),
+          slackIntegration,
+          slackOAuthState: null, // Clear state
+        } as any,
+      },
+    });
+
+    return NextResponse.redirect(
+      `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/settings?success=slack_connected`
+    );
+  } catch (error) {
+    console.error('Slack OAuth callback error:', error);
+    return NextResponse.redirect(
+      `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/settings?error=slack_auth_error`
+    );
+  }
+}

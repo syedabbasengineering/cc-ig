@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/lib/auth';
-import { PrismaClient } from '@prisma/client';
+import { authOptions } from '@/src/lib/auth';
+import { prisma } from '@/src/lib/db/client';
 
-const prisma = new PrismaClient();
 
 function calculateLearningStats(edits: any[], contents: any[]) {
   if (edits.length === 0) {
@@ -25,7 +24,7 @@ function calculateLearningStats(edits: any[], contents: any[]) {
     return acc;
   }, {} as Record<string, number>);
 
-  const mostEditedField = Object.entries(fieldCounts).sort(([,a], [,b]) => b - a)[0]?.[0] || 'caption';
+  const mostEditedField = Object.entries(fieldCounts).sort(([,a], [,b]) => (b as number) - (a as number))[0]?.[0] || 'caption';
 
   // Calculate improvement trend based on edit frequency over time
   const sortedEdits = edits.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
@@ -64,7 +63,7 @@ function calculateLearningStats(edits: any[], contents: any[]) {
   }
 
   // Factor 3: Consistency in edit types (focused learning)
-  const fieldDistribution = Object.values(fieldCounts);
+  const fieldDistribution = Object.values(fieldCounts) as number[];
   const maxFieldCount = Math.max(...fieldDistribution);
   const consistency = maxFieldCount / totalEdits;
 

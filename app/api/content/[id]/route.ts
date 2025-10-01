@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/lib/auth';
-import { PrismaClient } from '@prisma/client';
+import { authOptions } from '@/src/lib/auth';
+import { prisma } from '@/src/lib/db/client';
 
-const prisma = new PrismaClient();
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
     const session = await getServerSession(authOptions);
 
@@ -29,7 +29,7 @@ export async function DELETE(
     // Verify the content belongs to the user's workspace
     const content = await prisma.content.findFirst({
       where: {
-        id: params.id,
+        id: id,
         workspaceId: workspace.id
       }
     });
@@ -41,7 +41,7 @@ export async function DELETE(
     // Delete the content
     await prisma.content.delete({
       where: {
-        id: params.id
+        id: id
       }
     });
 
@@ -54,8 +54,9 @@ export async function DELETE(
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
     const session = await getServerSession(authOptions);
 
@@ -75,7 +76,7 @@ export async function GET(
 
     const content = await prisma.content.findFirst({
       where: {
-        id: params.id,
+        id: id,
         workspaceId: workspace.id
       },
       include: {

@@ -1,22 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/src/lib/db/client';
 import { publishingQueue } from '@/src/server/queue';
+import { slackConfigService } from '@/src/lib/integrations/slack-config';
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
+    const bodyText = await request.text();
+    const body = JSON.parse(bodyText);
 
     // Handle Slack URL verification challenge
     if (body.type === 'url_verification') {
       return NextResponse.json({ challenge: body.challenge });
     }
 
-    // Verify Slack signature (in production)
-    // const signature = request.headers.get('x-slack-signature');
-    // const timestamp = request.headers.get('x-slack-request-timestamp');
-    // if (!verifySlackSignature(body, signature, timestamp)) {
-    //   return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
-    // }
+    // Verify Slack signature for security
+    const signature = request.headers.get('x-slack-signature');
+    const timestamp = request.headers.get('x-slack-request-timestamp');
+
+    if (process.env.NODE_ENV === 'production') {
+      if (!slackConfigService.verifySlackSignature(bodyText, signature, timestamp)) {
+        console.error('Invalid Slack signature');
+        return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
+      }
+    }
 
     // Handle different Slack events
     switch (body.type) {
@@ -296,16 +302,7 @@ async function approveContentCommand(params: string, userId: string) {
   }
 }
 
-// Helper function to verify Slack signature (implement when needed)
-// function verifySlackSignature(body: any, signature: string | null, timestamp: string | null): boolean {
-//   if (!signature || !timestamp) return false;
-//
-//   const hmac = crypto.createHmac('sha256', process.env.SLACK_SIGNING_SECRET!);
-//   const [version, hash] = signature.split('=');
-//   const baseString = `${version}:${timestamp}:${JSON.stringify(body)}`;
-//
-//   hmac.update(baseString, 'utf8');
-//   const expectedSignature = hmac.digest('hex');
-//
-//   return hash === expectedSignature;
-// }
+/**
+ * Slack webhook handler - handles incoming events from Slack
+ * including interactive components, slash commands, and event callbacks
+ */

@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/lib/auth';
-import { PrismaClient } from '@prisma/client';
+import { authOptions } from '@/src/lib/auth';
+import { prisma } from '@/src/lib/db/client';
 
-const prisma = new PrismaClient();
 
 // Mock analysis function - in production, this would use AI/NLP services
 function runBrandVoiceAnalysis(samples: { content: string }[]) {

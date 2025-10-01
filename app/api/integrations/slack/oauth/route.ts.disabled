@@ -1,0 +1,55 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/src/lib/db/client';
+import { slackConfigService } from '@/src/lib/integrations/slack-config';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/src/lib/auth';
+
+/**
+ * Initiates Slack OAuth flow
+ */
+export async function GET(request: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { searchParams } = new URL(request.url);
+    const workspaceId = searchParams.get('workspace_id');
+
+    if (!workspaceId) {
+      return NextResponse.json(
+        { error: 'Workspace ID required' },
+        { status: 400 }
+      );
+    }
+
+    // Generate state parameter for CSRF protection
+    const state = `${workspaceId}:${Date.now()}:${Math.random().toString(36)}`;
+
+    // Store state in session or database for verification
+    await prisma.workspace.update({
+      where: { id: workspaceId },
+      data: {
+        settings: {
+          ...((await prisma.workspace.findUnique({
+            where: { id: workspaceId },
+            select: { settings: true },
+          }))?.settings as any),
+          slackOAuthState: state,
+        } as any,
+      },
+    });
+
+    const redirectUri = `${process.env.NEXT_PUBLIC_APP_URL}/api/integrations/slack/callback`;
+    const authUrl = slackConfigService.getAuthorizationUrl(state, redirectUri);
+
+    return NextResponse.redirect(authUrl);
+  } catch (error) {
+    console.error('Slack OAuth initiation error:', error);
+    return NextResponse.json(
+      { error: 'Failed to initiate OAuth' },
+      { status: 500 }
+    );
+  }
+}

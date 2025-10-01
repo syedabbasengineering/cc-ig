@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/lib/auth';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { authOptions } from '@/src/lib/auth';
+import { prisma } from '@/src/lib/db/client';
 
 function generateMockPerformance() {
   const baseReach = Math.floor(Math.random() * 5000) + 500;

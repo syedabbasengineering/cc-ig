@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/lib/auth';
-import { PrismaClient } from '@prisma/client';
+import { authOptions } from '@/src/lib/auth';
+import { prisma } from '@/src/lib/db/client';
 
-const prisma = new PrismaClient();
 
 function generateLearningInsights(edits: any[]) {
   if (edits.length === 0) return [];
@@ -97,14 +96,14 @@ function generateLearningInsights(edits: any[]) {
     return acc;
   }, {} as Record<string, number>);
 
-  const mostEditedPlatform = Object.entries(platformEdits).sort(([,a], [,b]) => b - a)[0];
-  if (mostEditedPlatform && mostEditedPlatform[1] > edits.length * 0.5) {
+  const mostEditedPlatform = Object.entries(platformEdits).sort(([,a], [,b]) => (b as number) - (a as number))[0];
+  if (mostEditedPlatform && (mostEditedPlatform[1] as number) > edits.length * 0.5) {
     insights.push({
       category: 'Platform Focus',
-      insight: `You make the most adjustments to ${mostEditedPlatform[0]} content, showing focused optimization for this platform.`,
+      insight: `You make the most adjustments to ${mostEditedPlatform[0] as string} content, showing focused optimization for this platform.`,
       confidence: 0.8,
-      examples: [`${mostEditedPlatform[1]} out of ${edits.length} total edits`],
-      frequency: mostEditedPlatform[1]
+      examples: [`${mostEditedPlatform[1] as number} out of ${edits.length} total edits`],
+      frequency: mostEditedPlatform[1] as number
     });
   }
 
