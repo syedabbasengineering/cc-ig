@@ -31,12 +31,10 @@ export const scrapingWorker = new Worker<QueueJobData['scraping']>(
         timeframe: config.timeframe,
       });
 
-      if (posts.length === 0) {
-        throw new Error('No posts found matching criteria');
-      }
+      console.log(`Scraped ${posts.length} posts for topic: ${topic}`);
 
-      // Analyze the scraped content
-      const analysis = await scraper.analyzeContent(posts);
+      // Analyze the scraped content (will work even with 0 posts)
+      const analysis = await scraper.analyzeContent(posts.length > 0 ? posts : []);
 
       // Save scraped data to database
       await prisma.workflowRun.update({

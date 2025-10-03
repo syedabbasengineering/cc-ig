@@ -137,7 +137,11 @@ export const workflowRouter = router({
       return await ctx.prisma.workflowRun.findUnique({
         where: { id: input.runId },
         include: {
-          workflow: true,
+          workflow: {
+            include: {
+              workspace: true,
+            },
+          },
           contents: {
             include: {
               edits: true,

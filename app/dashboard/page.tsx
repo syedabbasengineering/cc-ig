@@ -1,8 +1,31 @@
 'use client';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { trpc } from '@/src/lib/trpc/client';
+import Link from 'next/link';
 
 export default function DashboardPage() {
+  // Get current workspace
+  const { data: workspaces } = trpc.workspace.list.useQuery();
+  const workspaceId = workspaces?.[0]?.id;
+
+  // Fetch workflows for the workspace
+  const { data: workflows, isLoading: loadingWorkflows } = trpc.workflow.list.useQuery(
+    { workspaceId: workspaceId! },
+    { enabled: !!workspaceId }
+  );
+
+  // Fetch recent content
+  const { data: content } = trpc.content.list.useQuery(
+    { workspaceId: workspaceId!, status: 'reviewing' },
+    { enabled: !!workspaceId }
+  );
+
+  const activeWorkflows = workflows?.filter((w: any) => w.status === 'active')?.length || 0;
+  const pendingContent = content?.length || 0;
+  const publishedTodayCount = 0; // TODO: Add publishedAfter filter to content.list procedure
+
   return (
     <div className="space-y-6">
       <div>
@@ -32,9 +55,9 @@ export default function DashboardPage() {
             </svg>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">0</div>
+            <div className="text-2xl font-bold">{activeWorkflows}</div>
             <p className="text-xs text-muted-foreground">
-              No workflows running
+              {activeWorkflows === 0 ? 'No workflows running' : 'workflows currently active'}
             </p>
           </CardContent>
         </Card>
@@ -61,9 +84,9 @@ export default function DashboardPage() {
             </svg>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">0</div>
+            <div className="text-2xl font-bold">{content?.length || 0}</div>
             <p className="text-xs text-muted-foreground">
-              Start your first workflow
+              {content && content.length > 0 ? 'pieces of content generated' : 'Start your first workflow'}
             </p>
           </CardContent>
         </Card>
@@ -86,9 +109,9 @@ export default function DashboardPage() {
             </svg>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">0</div>
+            <div className="text-2xl font-bold">{pendingContent}</div>
             <p className="text-xs text-muted-foreground">
-              No content awaiting review
+              {pendingContent === 0 ? 'No content awaiting review' : 'pieces awaiting review'}
             </p>
           </CardContent>
         </Card>
@@ -113,9 +136,9 @@ export default function DashboardPage() {
             </svg>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">0</div>
+            <div className="text-2xl font-bold">{publishedTodayCount}</div>
             <p className="text-xs text-muted-foreground">
-              No posts published today
+              {publishedTodayCount === 0 ? 'No posts published today' : 'posts published today'}
             </p>
           </CardContent>
         </Card>
@@ -128,12 +151,44 @@ export default function DashboardPage() {
             <CardTitle>Recent Workflows</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-center py-8 text-muted-foreground">
-              <p>No workflows created yet</p>
-              <p className="text-sm mt-2">
-                Create your first workflow to get started
-              </p>
-            </div>
+            {loadingWorkflows ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <p>Loading workflows...</p>
+              </div>
+            ) : workflows && workflows.length > 0 ? (
+              <div className="space-y-3">
+                {workflows.slice(0, 5).map((workflow: any) => (
+                  <Link
+                    key={workflow.id}
+                    href={`/dashboard/workflows/${workflow.id}`}
+                    className="block p-3 border border-border rounded-lg hover:bg-accent transition-colors"
+                  >
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1">
+                        <h4 className="font-medium text-sm">{workflow.name}</h4>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {workflow._count?.runs || 0} runs
+                        </p>
+                      </div>
+                      <span className={`px-2 py-1 rounded text-xs font-medium ${
+                        workflow.status === 'active'
+                          ? 'bg-green-100 text-green-800'
+                          : 'bg-gray-100 text-gray-800'
+                      }`}>
+                        {workflow.status}
+                      </span>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">
+                <p>No workflows created yet</p>
+                <p className="text-sm mt-2">
+                  Create your first workflow to get started
+                </p>
+              </div>
+            )}
           </CardContent>
         </Card>
 

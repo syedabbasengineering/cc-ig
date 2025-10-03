@@ -10,10 +10,19 @@ export class IdeaGeneratorAgent {
 
   async generateIdeas(
     scrapedData: { posts: ScrapedPost[]; analysis: ContentAnalysis },
-    brandVoice?: BrandVoiceProfile | null
+    brandVoice?: BrandVoiceProfile | null,
+    topic?: string
   ): Promise<ContentIdea[]> {
     const topPosts = scrapedData.posts.slice(0, 10);
     const { analysis } = scrapedData;
+
+    // If no posts, generate ideas based on topic without scraped data context
+    if (topPosts.length === 0) {
+      if (!topic) {
+        throw new Error('Cannot generate ideas: no scraped data and no topic provided');
+      }
+      return this.generateIdeasFromTopic(topic, brandVoice);
+    }
 
     const prompt = `
       You are a content strategist analyzing trending content.
@@ -21,13 +30,13 @@ export class IdeaGeneratorAgent {
       Based on the following top-performing Instagram content:
 
       Top Posts Summary:
-      - Average engagement: ${analysis.avgEngagement}
-      - Top hashtags: ${analysis.hashtags.slice(0, 10).join(', ')}
-      - Content types: ${JSON.stringify(analysis.contentTypes)}
-      - Key themes: ${analysis.themes.join(', ')}
+      - Average engagement: ${analysis.avgEngagement || 0}
+      - Top hashtags: ${analysis.hashtags?.slice(0, 10).join(', ') || 'N/A'}
+      - Content types: ${JSON.stringify(analysis.contentTypes || {})}
+      - Key themes: ${analysis.themes?.join(', ') || 'N/A'}
 
       Sample high-performing posts:
-      ${topPosts.map(p => `- ${p.caption?.substring(0, 100)}... (${p.engagement} engagement)`).join('\n')}
+      ${topPosts.length > 0 ? topPosts.map(p => `- ${p.caption?.substring(0, 100)}... (${p.engagement} engagement)`).join('\n') : 'No sample posts available'}
 
       ${brandVoice ? `
       Brand Voice Guidelines:
@@ -129,6 +138,83 @@ export class IdeaGeneratorAgent {
       estimatedEngagement: analysis.avgEngagement,
       contentPillars: [themes[i % themes.length]],
       targetAudience: 'General audience',
+    }));
+  }
+  /**
+   * Generate ideas from topic alone (when scraping fails or returns no results)
+   * Uses AI to create real content ideas based on the user's topic
+   */
+  private async generateIdeasFromTopic(
+    topic: string,
+    brandVoice?: BrandVoiceProfile | null
+  ): Promise<ContentIdea[]> {
+    console.log(`Generating AI content ideas for topic: "${topic}"`);
+
+    const prompt = `
+      You are a creative Instagram content strategist.
+
+      Generate 5 unique, high-engagement Instagram content ideas specifically about: "${topic}"
+
+      ${brandVoice ? `
+      Brand Voice Guidelines:
+      - Tone: ${brandVoice.tone?.join(', ') || 'engaging, authentic'}
+      - Style: ${brandVoice.writingStyle?.join(', ') || 'conversational'}
+      - Themes: ${brandVoice.contentThemes?.join(', ') || 'lifestyle, inspiration'}
+      ` : 'Use an engaging, authentic, conversational tone'}
+
+      Requirements:
+      - ALL ideas must be directly related to "${topic}"
+      - Include diverse formats (reels, carousels, posts)
+      - Focus on actionable, valuable content
+      - Create scroll-stopping hooks
+      - Make content shareable and engaging
+
+      Return as JSON array with this exact structure:
+      {
+        "ideas": [
+          {
+            "id": "idea-1",
+            "title": "Content idea title about ${topic}",
+            "hook": "Compelling first line",
+            "angle": "Unique perspective on ${topic}",
+            "format": "reel|carousel|post",
+            "description": "Detailed description of the content",
+            "trendingAudio": "Audio suggestion if applicable for reels",
+            "estimatedEngagement": 5000,
+            "contentPillars": ["relevant", "categories"],
+            "targetAudience": "Who this content is for"
+          }
+        ]
+      }
+    `;
+
+    const ideas = await this.client.complete({
+      model: 'anthropic/claude-3-5-sonnet',
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0.8,
+      maxTokens: 3000,
+      responseFormat: 'json',
+    });
+
+    console.log('AI generated ideas response:', JSON.stringify(ideas).substring(0, 200));
+
+    const ideasArray = Array.isArray(ideas) ? ideas : ideas.ideas || [ideas];
+
+    if (!Array.isArray(ideasArray) || ideasArray.length === 0) {
+      throw new Error('AI failed to generate content ideas - received invalid response');
+    }
+
+    return ideasArray.slice(0, 5).map((idea: any, index: number) => ({
+      id: idea.id || `idea-${Date.now()}-${index}`,
+      title: idea.title || `Content Idea ${index + 1}`,
+      hook: idea.hook || '',
+      angle: idea.angle || '',
+      format: idea.format || 'post',
+      description: idea.description || '',
+      trendingAudio: idea.trendingAudio,
+      estimatedEngagement: idea.estimatedEngagement || 5000,
+      contentPillars: idea.contentPillars || [topic],
+      targetAudience: idea.targetAudience || 'general audience',
     }));
   }
 }

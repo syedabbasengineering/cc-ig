@@ -1,12 +1,13 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-// import { trpc } from '@/src/lib/trpc/client';
+import { trpc } from '@/src/lib/trpc/client';
 
 interface BrandVoiceSample {
   id: string;
@@ -15,6 +16,7 @@ interface BrandVoiceSample {
 }
 
 export default function NewWorkflowPage() {
+  const router = useRouter();
   const [step, setStep] = useState(1);
   const [topic, setTopic] = useState('');
   const [brandVoiceSamples, setBrandVoiceSamples] = useState<BrandVoiceSample[]>([]);
@@ -24,8 +26,20 @@ export default function NewWorkflowPage() {
     platforms: ['instagram'] as string[],
     schedulingEnabled: false,
   });
+  const [isCreating, setIsCreating] = useState(false);
 
-  // const createWorkflow = trpc.workflow.create.useMutation();
+  // Get current workspace (for demo, using first workspace)
+  const { data: workspaces, isLoading: loadingWorkspaces, error: workspaceError } = trpc.workspace.list.useQuery();
+  const workspaceId = workspaces?.[0]?.id;
+
+  const createWorkflow = trpc.workflow.create.useMutation();
+  const runWorkflow = trpc.workflow.run.useMutation();
+
+  // Debug logging
+  console.log('Workspaces:', workspaces);
+  console.log('Workspace ID:', workspaceId);
+  console.log('Loading workspaces:', loadingWorkspaces);
+  console.log('Workspace error:', workspaceError);
 
   const addBrandVoiceSample = () => {
     if (newSample.content.trim()) {
@@ -46,24 +60,52 @@ export default function NewWorkflowPage() {
   };
 
   const handleCreateWorkflow = async () => {
+    if (!workspaceId) {
+      alert('No workspace found. Please create a workspace first.');
+      return;
+    }
+
     try {
-      // For now, simulate workflow creation and redirect to demo page
-      const mockWorkflowId = 'demo-workflow-' + Date.now();
+      setIsCreating(true);
 
-      // Store the workflow data in localStorage for demo purposes
-      localStorage.setItem('demo-workflow', JSON.stringify({
-        id: mockWorkflowId,
+      // Step 1: Create workflow
+      const workflow = await createWorkflow.mutateAsync({
         name: `Content Workflow - ${topic}`,
-        topic,
-        brandVoiceSamples,
-        config: workflowConfig,
-        createdAt: new Date().toISOString(),
-      }));
+        workspaceId,
+        config: {
+          scrapingConfig: {
+            platform: 'instagram',
+            count: 100,
+            minEngagement: 1000,
+            timeframe: '7d',
+          },
+          aiConfig: {
+            ideaCount: workflowConfig.contentCount,
+            contentVariations: 1,
+          },
+        },
+      });
 
-      // Redirect to workflow execution page
-      window.location.href = `/dashboard/workflows/${mockWorkflowId}`;
+      console.log('Workflow created:', workflow.id);
+
+      // Step 2: Run workflow with topic and brand voice samples
+      const run = await runWorkflow.mutateAsync({
+        workflowId: workflow.id,
+        topic,
+        brandVoiceSamples: brandVoiceSamples.length > 0
+          ? brandVoiceSamples.map(s => s.content)
+          : undefined,
+      });
+
+      console.log('Workflow started:', run.runId);
+
+      // Redirect to workflow run page
+      router.push(`/dashboard/workflows/runs/${run.runId}`);
     } catch (error) {
       console.error('Failed to create workflow:', error);
+      alert('Failed to create workflow. Check console for details.');
+    } finally {
+      setIsCreating(false);
     }
   };
 
@@ -345,8 +387,12 @@ export default function NewWorkflowPage() {
                 <Button
                   onClick={handleCreateWorkflow}
                   className="px-8"
+                  disabled={isCreating || loadingWorkspaces}
                 >
-                  Create Workflow
+                  {isCreating ? 'Creating & Starting Workflow...' :
+                   loadingWorkspaces ? 'Loading...' :
+                   !workspaceId ? 'No Workspace Found' :
+                   'Create & Start Workflow'}
                 </Button>
               </div>
             </CardContent>

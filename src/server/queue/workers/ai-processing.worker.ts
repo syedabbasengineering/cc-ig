@@ -76,7 +76,7 @@ export const aiProcessingWorker = new Worker<QueueJobData['aiProcessing']>(
 
       // Generate content ideas
       const ideaGenerator = new IdeaGeneratorAgent();
-      const ideas = await ideaGenerator.generateIdeas(scrapedData, finalBrandVoice);
+      const ideas = await ideaGenerator.generateIdeas(scrapedData, finalBrandVoice, run.topic);
 
       // Rank ideas
       const rankedIdeas = await ideaGenerator.rankIdeas(ideas);

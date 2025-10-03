@@ -37,8 +37,11 @@ export class InstagramScraper {
         `,
       };
 
+      console.log('Calling Apify Instagram scraper...');
       const run = await this.client.actor('apify/instagram-scraper').call(input);
       const { items } = await this.client.dataset(run.defaultDatasetId).listItems();
+
+      console.log(`Apify returned ${items.length} items`);
 
       // Transform and filter the scraped data
       const posts: ScrapedPost[] = items
